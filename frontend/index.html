@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emotion + Intent Engine</title>
+<style>
+  :root {
+    --bg:#0f1117; --card:#181b24; --line:#2a2f3d; --text:#e8eaf0; --muted:#8b92a5;
+    --accent:#7c5cff; --accent2:#22d3ee;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:1000px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:2rem; }
+  .sub { color:var(--muted); margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:20px; }
+  textarea { width:100%; min-height:130px; background:#0f1117; color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:12px; font:inherit; resize:vertical; }
+  textarea:focus { outline:2px solid var(--accent); border-color:transparent; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:10px 18px; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); font-weight:500; padding:6px 12px; font-size:.85rem; }
+  button.ghost:hover { color:var(--text); border-color:var(--accent); }
+  .count { margin-left:auto; color:var(--muted); font-size:.85rem; }
+  .hero { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .big { text-align:center; padding:18px; border-radius:12px; background:#0f1117; border:1px solid var(--line); }
+  .big .emoji { font-size:3rem; }
+  .big .label { font-size:1.4rem; font-weight:700; text-transform:capitalize; margin-top:4px; }
+  .big .conf { color:var(--muted); font-size:.9rem; }
+  .big small { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:.7rem; }
+  .summary { margin:16px 0 0; padding:12px 14px; border-left:3px solid var(--accent2); background:#0f1117; border-radius:6px; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.78rem; background:#0f1117; border:1px solid var(--line); color:var(--muted); margin-right:6px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  h3 { margin:0 0 12px; font-size:1rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .bar { display:grid; grid-template-columns:130px 1fr 52px; align-items:center; gap:10px; margin:8px 0; font-size:.92rem; }
+  .track { height:10px; background:#0f1117; border-radius:99px; overflow:hidden; }
+  .fill { height:100%; border-radius:99px; width:0; transition:width .6s cubic-bezier(.2,.8,.2,1); }
+  .emo .fill { background:linear-gradient(90deg,var(--accent),#c084fc); }
+  .int .fill { background:linear-gradient(90deg,var(--accent2),#34d399); }
+  .pct { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .hist-item { display:flex; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--line); cursor:pointer; font-size:.9rem; }
+  .hist-item:first-child { border-top:0; }
+  .hist-item span.t { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--muted); }
+  .hidden { display:none; }
+  .err { color:#f87171; margin-top:10px; }
+  @media (max-width:700px) { .hero,.cols { grid-template-columns:1fr; } .bar { grid-template-columns:110px 1fr 48px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎭 Emotion + Intent Engine</h1>
+  <div class="sub">Paste any text to see how the author feels and what they want.</div>
+
+  <div class="card">
+    <textarea id="text" placeholder="e.g. I'm so frustrated! My order never arrived, please refund me."></textarea>
+    <div class="row">
+      <button id="go">Analyze</button>
+      <button class="ghost" data-ex="I'm so frustrated! My order arrived broken and nobody is answering. Please refund me immediately.">Complaint</button>
+      <button class="ghost" data-ex="Thank you so much, this is absolutely wonderful! I love it, the team did an amazing job 😍">Praise</button>
+      <button class="ghost" data-ex="Hi, how much does the premium plan cost? I'm interested in buying it for my team.">Purchase</button>
+      <button class="ghost" data-ex="I'm really worried about the exam tomorrow. What if I fail? I can't stop feeling anxious.">Fear</button>
+      <button class="ghost" data-ex="It would be great if you could add a dark mode. Maybe also improve the search?">Suggestion</button>
+      <span class="count" id="count">0 words</span>
+    </div>
+    <div class="err hidden" id="err"></div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="card">
+      <div class="hero">
+        <div class="big"><small>Dominant emotion</small><div class="emoji" id="eEmoji"></div><div class="label" id="eLabel"></div><div class="conf" id="eConf"></div></div>
+        <div class="big"><small>Likely intent</small><div class="emoji" id="iEmoji"></div><div class="label" id="iLabel"></div><div class="conf" id="iConf"></div></div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div style="margin-top:12px"><span class="badge" id="bInt"></span><span class="badge" id="bWords"></span><span class="badge" id="bEngine"></span></div>
+    </div>
+    <div class="card cols">
+      <div class="emo"><h3>Emotions</h3><div id="emoBars"></div></div>
+      <div class="int"><h3>Intents</h3><div id="intBars"></div></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="histCard"><h3>History</h3><div id="hist"></div></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const history = [];
+
+$("text").addEventListener("input", () => {
+  const n = $("text").value.trim().split(/\s+/).filter(Boolean).length;
+  $("count").textContent = n + (n === 1 ? " word" : " words");
+});
+document.querySelectorAll("[data-ex]").forEach(b => b.addEventListener("click", () => {
+  $("text").value = b.dataset.ex; $("text").dispatchEvent(new Event("input")); analyze();
+}));
+$("go").addEventListener("click", analyze);
+$("text").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze(); });
+
+function bars(el, items) {
+  el.innerHTML = items.map(i => `
+    <div class="bar"><span>${i.emoji} ${i.label}</span>
+    <div class="track"><div class="fill" data-w="${i.percent}"></div></div>
+    <span class="pct">${i.percent}%</span></div>`).join("");
+  requestAnimationFrame(() => el.querySelectorAll(".fill").forEach(f => f.style.width = f.dataset.w + "%"));
+}
+
+function render(d) {
+  $("eEmoji").textContent = d.primary_emotion_emoji;
+  $("eLabel").textContent = d.primary_emotion;
+  $("eConf").textContent = d.emotion_confidence ? (d.emotion_confidence * 100).toFixed(0) + "% confidence" : "no signal";
+  $("iEmoji").textContent = d.primary_intent_emoji;
+  $("iLabel").textContent = d.primary_intent;
+  $("iConf").textContent = d.intent_confidence ? (d.intent_confidence * 100).toFixed(0) + "% confidence" : "no signal";
+  $("summary").innerHTML = d.summary.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  $("bInt").textContent = "Intensity: " + d.intensity;
+  $("bWords").textContent = d.word_count + " words";
+  $("bEngine").textContent = "Engine: " + d.engine;
+  bars($("emoBars"), d.emotions);
+  bars($("intBars"), d.intents);
+  $("result").classList.remove("hidden");
+}
+
+function addHistory(text, d) {
+  history.unshift({ text, d });
+  if (history.length > 8) history.pop();
+  $("hist").innerHTML = history.map((h, i) =>
+    `<div class="hist-item" data-i="${i}"><span>${h.d.primary_emotion_emoji}${h.d.primary_intent_emoji}</span>
+     <span class="t"></span><span class="badge">${h.d.primary_emotion} · ${h.d.primary_intent}</span></div>`).join("");
+  $("hist").querySelectorAll(".hist-item").forEach(el => {
+    const h = history[el.dataset.i];
+    el.querySelector(".t").textContent = h.text;
+    el.addEventListener("click", () => { $("text").value = h.text; render(h.d); });
+  });
+  $("histCard").classList.remove("hidden");
+}
+
+async function analyze() {
+  const text = $("text").value.trim();
+  $("err").classList.add("hidden");
+  if (!text) { $("err").textContent = "Please enter some text."; $("err").classList.remove("hidden"); return; }
+  $("go").disabled = true;
+  try {
+    const r = await fetch("/api/emotion-intent", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text })
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
+    const d = await r.json();
+    render(d); addHistory(text, d);
+  } catch (e) {
+    $("err").textContent = e.message; $("err").classList.remove("hidden");
+  } finally { $("go").disabled = false; }
+}
+</script>
+</body>
+</html>
